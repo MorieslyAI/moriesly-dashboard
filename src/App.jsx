@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:3000";
+  "http://localhost:3001";
 
 const TOKEN_KEY = "moriesly_admin_token";
 
@@ -62,6 +62,7 @@ function initials(name) {
 function badgeType(value) {
   const key = String(value || "").toLowerCase();
   if (key === "admin" || key === "pro_max") return "purple";
+  if (key === "pro max" || key === "pro-max" || key === "promax") return "purple";
   if (key === "pro" || key === "trial") return "blue";
   if (key === "active") return "green";
   if (key === "expired" || key === "cancelled" || key === "suspended") {
@@ -83,7 +84,8 @@ async function apiRequest(path, { token, method = "GET", body, signal } = {}) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = payload?.error || `Request gagal (${response.status})`;
+    const message =
+      payload?.message || payload?.error || `Request gagal (${response.status})`;
     const error = new Error(message);
     error.status = response.status;
     throw error;
@@ -312,7 +314,7 @@ function DashboardView({ overview, plans, onSeedPlans, seedLoading }) {
         />
         <StatCard
           title="Pro Max"
-          value={usersByPlan.pro_max ?? 0}
+          value={usersByPlan.pro_max ?? usersByPlan["pro max"] ?? 0}
           description="Highest paid plan"
           icon="◇"
         />
@@ -1207,7 +1209,7 @@ export default function App() {
     if (filters.role) params.set("role", filters.role);
     if (filters.plan) params.set("plan", filters.plan);
     if (filters.status) params.set("status", filters.status);
-    return `/admin/users?${params.toString()}`;
+    return `/api/admin/users?${params.toString()}`;
   }, [filters, page]);
 
   const loadData = useCallback(
@@ -1219,11 +1221,11 @@ export default function App() {
       try {
         const [overviewRes, usersRes, plansRes, featuresRes, logsRes] =
           await Promise.all([
-            apiRequest("/admin/overview", { ...auth, signal }),
+            apiRequest("/api/admin/overview", { ...auth, signal }),
             apiRequest(buildUsersPath(), { ...auth, signal }),
-            apiRequest("/admin/plans", { ...auth, signal }),
-            apiRequest("/admin/features", { ...auth, signal }),
-            apiRequest("/admin/activity-logs?limit=30", { ...auth, signal }),
+            apiRequest("/api/admin/plans", { ...auth, signal }),
+            apiRequest("/api/admin/features", { ...auth, signal }),
+            apiRequest("/api/admin/activity-logs?limit=30", { ...auth, signal }),
           ]);
 
         setOverview(overviewRes);
@@ -1274,7 +1276,7 @@ export default function App() {
     setLoginError("");
 
     try {
-      const result = await apiRequest("/auth/login", {
+      const result = await apiRequest("/api/admin/login", {
         method: "POST",
         body: {
           email: loginEmail.trim(),
@@ -1282,8 +1284,9 @@ export default function App() {
         },
       });
 
-      localStorage.setItem(TOKEN_KEY, result.accessToken);
-      setToken(result.accessToken);
+      const accessToken = result.data?.token || result.token || result.accessToken;
+      localStorage.setItem(TOKEN_KEY, accessToken);
+      setToken(accessToken);
       setLoginPassword("");
       setLoginEmail("");
       showToast("Login berhasil. Dashboard admin siap digunakan.");
@@ -1307,7 +1310,7 @@ export default function App() {
     setSaving(false);
     setError("");
     try {
-      const detail = await apiRequest(`/admin/users/${user.userId}`, auth);
+      const detail = await apiRequest(`/api/admin/users/${user.userId}`, auth);
       setSelectedUser(detail);
     } catch (err) {
       setError(err.message);
@@ -1318,7 +1321,7 @@ export default function App() {
   const refreshAfterMutation = async () => {
     await loadData();
     if (selectedUser?.userId) {
-      const detail = await apiRequest(`/admin/users/${selectedUser.userId}`, auth);
+      const detail = await apiRequest(`/api/admin/users/${selectedUser.userId}`, auth);
       setSelectedUser(detail);
     }
   };
@@ -1328,7 +1331,7 @@ export default function App() {
     setSaving(true);
     setError("");
     try {
-      await apiRequest(`/admin/users/${selectedUser.userId}/role`, {
+      await apiRequest(`/api/admin/users/${selectedUser.userId}/role`, {
         ...auth,
         method: "PATCH",
         body: { role },
@@ -1348,7 +1351,7 @@ export default function App() {
     setSaving(true);
     setError("");
     try {
-      await apiRequest(`/admin/users/${selectedUser.userId}/status`, {
+      await apiRequest(`/api/admin/users/${selectedUser.userId}/status`, {
         ...auth,
         method: "PATCH",
         body: { status },
@@ -1368,7 +1371,7 @@ export default function App() {
     setSaving(true);
     setError("");
     try {
-      await apiRequest(`/admin/users/${selectedUser.userId}/subscription`, {
+      await apiRequest(`/api/admin/users/${selectedUser.userId}/subscription`, {
         ...auth,
         method: "PATCH",
         body: subscription,
@@ -1387,7 +1390,7 @@ export default function App() {
     setSeedLoading(true);
     setError("");
     try {
-      await apiRequest("/admin/plans/seed-defaults", {
+      await apiRequest("/api/admin/plans/seed-defaults", {
         ...auth,
         method: "POST",
       });
@@ -1405,7 +1408,7 @@ export default function App() {
     setSaving(true);
     setError("");
     try {
-      await apiRequest(`/admin/plans/${planId}`, {
+      await apiRequest(`/api/admin/plans/${planId}`, {
         ...auth,
         method: "PUT",
         body: payload,
