@@ -83,10 +83,37 @@ function formatPlan(plan) {
   return titleCase(plan || "free");
 }
 
+function parseDateValue(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "object") {
+    if (typeof value.toDate === "function") {
+      const converted = value.toDate();
+      return converted instanceof Date && !Number.isNaN(converted.getTime())
+        ? converted
+        : null;
+    }
+
+    const seconds = value.seconds ?? value._seconds;
+    const nanoseconds = value.nanoseconds ?? value._nanoseconds ?? 0;
+    if (Number.isFinite(Number(seconds))) {
+      const converted = new Date(
+        Number(seconds) * 1000 + Number(nanoseconds) / 1_000_000,
+      );
+      return Number.isNaN(converted.getTime()) ? null : converted;
+    }
+  }
+
+  const converted = new Date(value);
+  return Number.isNaN(converted.getTime()) ? null : converted;
+}
+
 function formatDate(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
+  const date = parseDateValue(value);
+  if (!date) return "-";
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -95,9 +122,8 @@ function formatDate(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
+  const date = parseDateValue(value);
+  if (!date) return "-";
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -128,9 +154,8 @@ function deletionStatusType(status) {
 }
 
 function daysUntil(value) {
-  if (!value) return null;
-  const deadline = new Date(value);
-  if (Number.isNaN(deadline.getTime())) return null;
+  const deadline = parseDateValue(value);
+  if (!deadline) return null;
   return Math.ceil((deadline.getTime() - Date.now()) / 86400000);
 }
 
@@ -153,9 +178,8 @@ function normalizeDeletionRequest(request, index) {
 }
 
 function toDateInput(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
+  const date = parseDateValue(value);
+  if (!date) return "";
   return date.toISOString().split("T")[0];
 }
 
