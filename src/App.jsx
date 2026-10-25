@@ -1085,7 +1085,7 @@ function DeletionRequestModal({ request, onClose, onResolve, saving }) {
             <div className="rounded-xl border border-red-200 bg-red-50 p-4">
               <p className="text-sm font-bold text-red-800">Konfirmasi penghapusan akun</p>
               <p className="mt-1 text-sm leading-6 text-red-700">
-                Tindakan ini akan memulai proses penghapusan permanen. Ketik
+                Tindakan ini akan menghapus akun Firebase dan seluruh data pengguna secara permanen. Ketik
                 <strong> HAPUS</strong> untuk melanjutkan.
               </p>
               <input
@@ -1117,18 +1117,18 @@ function DeletionRequestModal({ request, onClose, onResolve, saving }) {
               </button>
               {showConfirmation ? (
                 <button
-                  onClick={() => onResolve(request.id, "processing", adminNote)}
+                  onClick={() => onResolve(request.id, "completed", adminNote)}
                   disabled={saving || confirmText !== "HAPUS"}
                   className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
                 >
-                  {saving ? "Memproses..." : "Mulai penghapusan"}
+                  {saving ? "Menghapus akun..." : "Setujui & hapus akun"}
                 </button>
               ) : (
                 <button
                   onClick={() => setShowConfirmation(true)}
                   className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
                 >
-                  Setujui penghapusan
+                  Setujui & hapus akun
                 </button>
               )}
             </>
@@ -1139,7 +1139,7 @@ function DeletionRequestModal({ request, onClose, onResolve, saving }) {
               disabled={saving}
               className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
             >
-              {saving ? "Menyimpan..." : "Tandai selesai"}
+              {saving ? "Menghapus akun..." : "Hapus akun & selesaikan"}
             </button>
           ) : null}
         </div>
@@ -2057,7 +2057,7 @@ export default function App() {
       const messages = {
         rejected: "Permintaan penghapusan berhasil ditolak.",
         processing: "Proses penghapusan akun berhasil dimulai.",
-        completed: "Permintaan penghapusan ditandai selesai.",
+        completed: "Akun dan data pengguna berhasil dihapus.",
       };
       showToast(messages[status] || "Status permintaan berhasil diperbarui.");
     } catch (err) {
