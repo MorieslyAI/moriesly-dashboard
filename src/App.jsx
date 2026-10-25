@@ -5,10 +5,61 @@ const API_BASE_URL =
   "http://localhost:3001";
 
 const TOKEN_KEY = "moriesly_admin_token";
+const DELETION_PREVIEW_MODE =
+  import.meta.env.DEV &&
+  new URLSearchParams(window.location.search).get("preview") === "deletions";
+
+const previewDeletionRequests = [
+  {
+    id: "DEL-1048",
+    displayName: "Nadia Putri",
+    email: "nadia.putri@example.com",
+    userCreatedAt: "2025-03-18T08:30:00.000Z",
+    requestedAt: "2026-10-24T04:15:00.000Z",
+    deadlineAt: "2026-10-27T16:59:00.000Z",
+    reason: "Sudah tidak menggunakan layanan dan ingin seluruh data dihapus.",
+    status: "pending",
+    source: "Aplikasi iOS",
+  },
+  {
+    id: "DEL-1047",
+    displayName: "Rizky Mahendra",
+    email: "rizky.m@example.com",
+    userCreatedAt: "2024-11-02T10:10:00.000Z",
+    requestedAt: "2026-10-23T09:45:00.000Z",
+    deadlineAt: "2026-10-30T16:59:00.000Z",
+    reason: "Membuat akun baru dengan alamat email lain.",
+    status: "pending",
+    source: "Web",
+  },
+  {
+    id: "DEL-1046",
+    displayName: "Salsa Anindya",
+    email: "salsa.a@example.com",
+    userCreatedAt: "2025-08-14T02:20:00.000Z",
+    requestedAt: "2026-10-21T13:05:00.000Z",
+    deadlineAt: "2026-10-28T16:59:00.000Z",
+    reason: "Alasan privasi.",
+    status: "processing",
+    source: "Aplikasi Android",
+  },
+  {
+    id: "DEL-1042",
+    displayName: "Bima Prakoso",
+    email: "bima.p@example.com",
+    userCreatedAt: "2024-06-09T06:00:00.000Z",
+    requestedAt: "2026-10-12T03:25:00.000Z",
+    deadlineAt: "2026-10-19T16:59:00.000Z",
+    reason: "Tidak membutuhkan akun lagi.",
+    status: "completed",
+    source: "Web",
+  },
+];
 
 const menus = [
   { name: "Dashboard", icon: "⌂" },
   { name: "Users", icon: "♙" },
+  { name: "Permintaan Hapus", icon: "♲" },
   { name: "Plans", icon: "◇" },
   { name: "Subscriptions", icon: "▣" },
   { name: "Features & Limits", icon: "⚙" },
@@ -19,6 +70,7 @@ const menus = [
 const subscriptionStatusOptions = ["trial", "active", "expired", "cancelled"];
 const userStatusOptions = ["active", "suspended", "deleted"];
 const roleOptions = ["user", "admin"];
+const deletionStatusOptions = ["", "pending", "processing", "completed", "rejected"];
 
 function titleCase(value) {
   return String(value || "")
@@ -40,6 +92,64 @@ function formatDate(value) {
     month: "short",
     year: "numeric",
   }).format(date);
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function deletionStatusLabel(status) {
+  const labels = {
+    pending: "Menunggu",
+    processing: "Diproses",
+    completed: "Selesai",
+    rejected: "Ditolak",
+  };
+  return labels[status] || titleCase(status || "pending");
+}
+
+function deletionStatusType(status) {
+  const types = {
+    pending: "yellow",
+    processing: "blue",
+    completed: "green",
+    rejected: "red",
+  };
+  return types[status] || "gray";
+}
+
+function daysUntil(value) {
+  if (!value) return null;
+  const deadline = new Date(value);
+  if (Number.isNaN(deadline.getTime())) return null;
+  return Math.ceil((deadline.getTime() - Date.now()) / 86400000);
+}
+
+function normalizeDeletionRequest(request, index) {
+  const user = request.user || {};
+  return {
+    ...request,
+    id: request.id || request.requestId || `request-${index}`,
+    userId: request.userId || user.userId || user.id,
+    displayName: request.displayName || user.displayName || user.name,
+    email: request.email || user.email,
+    userCreatedAt: request.userCreatedAt || user.createdAt,
+    requestedAt: request.requestedAt || request.createdAt,
+    deadlineAt:
+      request.deadlineAt || request.scheduledDeletionAt || request.expiresAt,
+    source: request.source || request.requestSource,
+    status: request.status || "pending",
+    dataScopes: request.dataScopes || request.affectedData || [],
+  };
 }
 
 function toDateInput(value) {
@@ -100,6 +210,7 @@ function Badge({ children, type = "gray" }) {
     purple: "bg-violet-50 text-violet-600",
     green: "bg-emerald-50 text-emerald-600",
     red: "bg-red-50 text-red-600",
+    yellow: "bg-amber-50 text-amber-700",
   };
 
   return (
@@ -283,6 +394,27 @@ function Sidebar({ activeMenu, setActiveMenu, onLogout }) {
         </button>
       </div>
     </aside>
+  );
+}
+
+function MobileMenu({ activeMenu, setActiveMenu }) {
+  return (
+    <label className="mb-6 block md:hidden">
+      <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+        Menu admin
+      </span>
+      <select
+        value={activeMenu}
+        onChange={(event) => setActiveMenu(event.target.value)}
+        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm outline-none focus:border-violet-400"
+      >
+        {menus.map((menu) => (
+          <option key={menu.name} value={menu.name}>
+            {menu.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -613,6 +745,406 @@ function UserRow({ user, onOpenUser }) {
         </button>
       </td>
     </tr>
+  );
+}
+
+function DeletionStatCard({ label, value, caption, tone = "violet" }) {
+  const tones = {
+    violet: "bg-violet-50 text-violet-600",
+    amber: "bg-amber-50 text-amber-600",
+    blue: "bg-blue-50 text-blue-600",
+    green: "bg-emerald-50 text-emerald-600",
+  };
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-gray-500">{label}</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900">
+            {value}
+          </p>
+          <p className="mt-1 text-xs text-gray-400">{caption}</p>
+        </div>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tones[tone]}`}>
+          <span className="h-2.5 w-2.5 rounded-full bg-current" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeletionRequestsView({
+  requests,
+  summary,
+  filters,
+  setFilters,
+  loading,
+  error,
+  onSelect,
+  onRefresh,
+}) {
+  const counts = requests.reduce(
+    (result, request) => ({
+      ...result,
+      [request.status]: (result[request.status] || 0) + 1,
+    }),
+    {},
+  );
+  const pending = summary.pending ?? counts.pending ?? 0;
+  const processing = summary.processing ?? counts.processing ?? 0;
+  const completed = summary.completedThisMonth ?? counts.completed ?? 0;
+  const urgent =
+    summary.urgent ??
+    requests.filter((request) => {
+      const remaining = daysUntil(request.deadlineAt);
+      return request.status === "pending" && remaining !== null && remaining <= 2;
+    }).length;
+
+  return (
+    <div className="space-y-6">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <DeletionStatCard
+          label="Menunggu tinjauan"
+          value={pending}
+          caption="Perlu keputusan admin"
+          tone="amber"
+        />
+        <DeletionStatCard
+          label="Sedang diproses"
+          value={processing}
+          caption="Penghapusan sedang berjalan"
+          tone="blue"
+        />
+        <DeletionStatCard
+          label="Mendekati tenggat"
+          value={urgent}
+          caption="Kurang dari 48 jam"
+          tone="violet"
+        />
+        <DeletionStatCard
+          label="Selesai bulan ini"
+          value={completed}
+          caption="Permintaan terselesaikan"
+          tone="green"
+        />
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-5 py-5 lg:px-6">
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Daftar permintaan</h2>
+              <p className="mt-1 text-sm text-gray-400">
+                Tinjau identitas, alasan, dan tenggat sebelum mengambil tindakan.
+              </p>
+            </div>
+            <button
+              onClick={onRefresh}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:border-violet-200 hover:text-violet-600 disabled:opacity-50"
+            >
+              <span className={loading ? "animate-spin" : ""}>↻</span>
+              {loading ? "Memuat..." : "Perbarui data"}
+            </button>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 lg:flex-row">
+            <label className="flex flex-1 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/60 px-3 focus-within:border-violet-400 focus-within:bg-white">
+              <span className="text-gray-400">⌕</span>
+              <input
+                type="search"
+                value={filters.search}
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, search: event.target.value }))
+                }
+                placeholder="Cari nama atau email pengguna..."
+                className="w-full bg-transparent py-2.5 text-sm outline-none placeholder:text-gray-400"
+              />
+            </label>
+            <select
+              value={filters.status}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, status: event.target.value }))
+              }
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-600 outline-none focus:border-violet-400"
+            >
+              {deletionStatusOptions.map((status) => (
+                <option key={status || "all"} value={status}>
+                  {status ? deletionStatusLabel(status) : "Semua status"}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {error ? (
+          <div className="m-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <p className="font-semibold">Data permintaan belum dapat dimuat</p>
+            <p className="mt-1 text-red-600">{error}</p>
+          </div>
+        ) : null}
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[960px]">
+            <thead>
+              <tr className="bg-gray-50/80 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                <th className="px-6 py-3.5">Pengguna</th>
+                <th className="px-4 py-3.5">Diajukan</th>
+                <th className="px-4 py-3.5">Alasan</th>
+                <th className="px-4 py-3.5">Tenggat</th>
+                <th className="px-4 py-3.5">Status</th>
+                <th className="px-6 py-3.5 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {requests.map((request) => {
+                const remaining = daysUntil(request.deadlineAt);
+                const urgentDeadline =
+                  request.status === "pending" && remaining !== null && remaining <= 2;
+                return (
+                  <tr key={request.id} className="border-t border-gray-100 hover:bg-gray-50/50">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
+                          {initials(request.displayName || request.email)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-800">
+                            {request.displayName || "Pengguna tanpa nama"}
+                          </p>
+                          <p className="mt-0.5 truncate text-xs text-gray-400">
+                            {request.email || "-"}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <p className="text-sm font-medium text-gray-700">
+                        {formatDate(request.requestedAt)}
+                      </p>
+                      <p className="mt-0.5 text-xs text-gray-400">
+                        {request.source || "Aplikasi"}
+                      </p>
+                    </td>
+                    <td className="max-w-[240px] px-4 py-4">
+                      <p className="truncate text-sm text-gray-600">
+                        {request.reason || "Tidak ada alasan yang diberikan"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-4">
+                      <p className={`text-sm font-semibold ${urgentDeadline ? "text-red-600" : "text-gray-700"}`}>
+                        {formatDate(request.deadlineAt)}
+                      </p>
+                      {remaining !== null && request.status === "pending" ? (
+                        <p className={`mt-0.5 text-xs ${urgentDeadline ? "text-red-500" : "text-gray-400"}`}>
+                          {remaining < 0
+                            ? `Terlambat ${Math.abs(remaining)} hari`
+                            : remaining === 0
+                              ? "Jatuh tempo hari ini"
+                              : `${remaining} hari lagi`}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-4">
+                      <Badge type={deletionStatusType(request.status)}>
+                        {deletionStatusLabel(request.status)}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => onSelect(request)}
+                        className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700"
+                      >
+                        Tinjau
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {!loading && !error && requests.length === 0 ? (
+          <div className="px-6 py-16 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-xl text-emerald-600">
+              ✓
+            </div>
+            <p className="mt-4 font-semibold text-gray-700">Tidak ada permintaan</p>
+            <p className="mt-1 text-sm text-gray-400">
+              Semua permintaan pada filter ini sudah ditangani.
+            </p>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function DeletionRequestModal({ request, onClose, onResolve, saving }) {
+  const [adminNote, setAdminNote] = useState(request.adminNote || "");
+  const [confirmText, setConfirmText] = useState("");
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const canReview = request.status === "pending";
+  const canComplete = request.status === "processing";
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/50 p-4 backdrop-blur-sm"
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+      >
+        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-gray-900">Tinjau permintaan</h2>
+              <Badge type={deletionStatusType(request.status)}>
+                {deletionStatusLabel(request.status)}
+              </Badge>
+            </div>
+            <p className="mt-1 text-sm text-gray-400">ID: {request.id}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            aria-label="Tutup"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="space-y-6 p-6">
+          <div className="flex items-center gap-4 rounded-xl bg-gray-50 p-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700">
+              {initials(request.displayName || request.email)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-gray-900">
+                {request.displayName || "Pengguna tanpa nama"}
+              </p>
+              <p className="truncate text-sm text-gray-500">{request.email || "-"}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-400">Terdaftar sejak</p>
+              <p className="mt-1 text-sm font-semibold text-gray-700">
+                {formatDate(request.userCreatedAt)}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SummaryBox label="Permintaan diajukan" value={formatDateTime(request.requestedAt)} />
+            <SummaryBox label="Tenggat penyelesaian" value={formatDateTime(request.deadlineAt)} />
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Alasan pengguna
+            </p>
+            <p className="mt-2 rounded-xl border border-gray-200 px-4 py-3 text-sm leading-6 text-gray-600">
+              {request.reason || "Pengguna tidak memberikan alasan tambahan."}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Data yang akan dihapus
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {(request.dataScopes?.length
+                ? request.dataScopes
+                : ["Profil dan preferensi", "Riwayat aktivitas", "File pengguna", "Data langganan"]
+              ).map((scope) => (
+                <div key={scope} className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-red-100 text-[10px]">×</span>
+                  {scope}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <label className="block">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Catatan admin
+            </span>
+            <textarea
+              value={adminNote}
+              onChange={(event) => setAdminNote(event.target.value)}
+              rows={3}
+              disabled={!canReview && !canComplete}
+              placeholder="Tambahkan alasan keputusan atau catatan internal..."
+              className="w-full resize-none rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-violet-400 disabled:bg-gray-50 disabled:text-gray-500"
+            />
+          </label>
+
+          {showConfirmation ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+              <p className="text-sm font-bold text-red-800">Konfirmasi penghapusan akun</p>
+              <p className="mt-1 text-sm leading-6 text-red-700">
+                Tindakan ini akan memulai proses penghapusan permanen. Ketik
+                <strong> HAPUS</strong> untuk melanjutkan.
+              </p>
+              <input
+                autoFocus
+                value={confirmText}
+                onChange={(event) => setConfirmText(event.target.value)}
+                placeholder="Ketik HAPUS"
+                className="mt-3 w-full rounded-lg border border-red-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-red-400"
+              />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-gray-100 bg-gray-50/70 px-6 py-4 sm:flex-row sm:justify-end">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+          >
+            Tutup
+          </button>
+          {canReview ? (
+            <>
+              <button
+                onClick={() => onResolve(request.id, "rejected", adminNote)}
+                disabled={saving || !adminNote.trim()}
+                className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Tolak permintaan
+              </button>
+              {showConfirmation ? (
+                <button
+                  onClick={() => onResolve(request.id, "processing", adminNote)}
+                  disabled={saving || confirmText !== "HAPUS"}
+                  className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                >
+                  {saving ? "Memproses..." : "Mulai penghapusan"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowConfirmation(true)}
+                  className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+                >
+                  Setujui penghapusan
+                </button>
+              )}
+            </>
+          ) : null}
+          {canComplete ? (
+            <button
+              onClick={() => onResolve(request.id, "completed", adminNote)}
+              disabled={saving}
+              className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {saving ? "Menyimpan..." : "Tandai selesai"}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1162,8 +1694,12 @@ function PlanModal({ plan, onClose, onSave, saving }) {
 }
 
 export default function App() {
-  const [activeMenu, setActiveMenu] = useState("Dashboard");
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || "");
+  const [activeMenu, setActiveMenu] = useState(
+    DELETION_PREVIEW_MODE ? "Permintaan Hapus" : "Dashboard",
+  );
+  const [token, setToken] = useState(() =>
+    DELETION_PREVIEW_MODE ? "preview-token" : localStorage.getItem(TOKEN_KEY) || "",
+  );
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -1173,6 +1709,11 @@ export default function App() {
   const [plans, setPlans] = useState([]);
   const [featureMeta, setFeatureMeta] = useState({ features: [], limits: [] });
   const [logs, setLogs] = useState([]);
+  const [deletionRequests, setDeletionRequests] = useState([]);
+  const [deletionSummary, setDeletionSummary] = useState({});
+  const [deletionFilters, setDeletionFilters] = useState({ search: "", status: "" });
+  const [deletionLoading, setDeletionLoading] = useState(false);
+  const [deletionError, setDeletionError] = useState("");
   const [filters, setFilters] = useState({
     search: "",
     role: "",
@@ -1192,6 +1733,7 @@ export default function App() {
   const [seedLoading, setSeedLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedDeletionRequest, setSelectedDeletionRequest] = useState(null);
   const [editingPlan, setEditingPlan] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -1212,9 +1754,60 @@ export default function App() {
     return `/api/admin/users?${params.toString()}`;
   }, [filters, page]);
 
+  const buildDeletionRequestsPath = useCallback(() => {
+    const params = new URLSearchParams();
+    if (deletionFilters.search.trim()) {
+      params.set("search", deletionFilters.search.trim());
+    }
+    if (deletionFilters.status) params.set("status", deletionFilters.status);
+    const query = params.toString();
+    return `/api/admin/account-deletion-requests${query ? `?${query}` : ""}`;
+  }, [deletionFilters]);
+
+  const loadDeletionRequests = useCallback(
+    async ({ signal, successMessage } = {}) => {
+      if (!token) return;
+      if (DELETION_PREVIEW_MODE) {
+        setDeletionRequests(previewDeletionRequests.map(normalizeDeletionRequest));
+        setDeletionSummary({
+          pending: 2,
+          processing: 1,
+          urgent: 1,
+          completedThisMonth: 8,
+        });
+        return;
+      }
+      setDeletionLoading(true);
+      setDeletionError("");
+      try {
+        const result = await apiRequest(buildDeletionRequestsPath(), {
+          ...auth,
+          signal,
+        });
+        const items = result.items || result.data?.items || result.data || [];
+        setDeletionRequests(
+          Array.isArray(items) ? items.map(normalizeDeletionRequest) : [],
+        );
+        setDeletionSummary(result.summary || result.data?.summary || {});
+        if (successMessage) showToast(successMessage);
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        setDeletionError(err.message);
+        if (err.status === 401 || err.status === 403) {
+          localStorage.removeItem(TOKEN_KEY);
+          setToken("");
+        }
+      } finally {
+        setDeletionLoading(false);
+      }
+    },
+    [auth, buildDeletionRequestsPath, showToast, token],
+  );
+
   const loadData = useCallback(
     async ({ signal, successMessage } = {}) => {
       if (!token) return;
+      if (DELETION_PREVIEW_MODE) return;
       setLoading(true);
       setError("");
 
@@ -1266,6 +1859,18 @@ export default function App() {
   }, [loadData]);
 
   useEffect(() => {
+    if (activeMenu !== "Permintaan Hapus") return undefined;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void loadDeletionRequests({ signal: controller.signal });
+    }, deletionFilters.search ? 250 : 0);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [activeMenu, deletionFilters.search, deletionFilters.status, loadDeletionRequests]);
+
+  useEffect(() => {
     if (!toast) return undefined;
     const timer = window.setTimeout(() => setToast(null), 3500);
     return () => window.clearTimeout(timer);
@@ -1285,6 +1890,8 @@ export default function App() {
       });
 
       const accessToken = result.data?.token || result.token || result.accessToken;
+      if (!accessToken) throw new Error("Token login tidak ditemukan pada respons API.");
+
       localStorage.setItem(TOKEN_KEY, accessToken);
       setToken(accessToken);
       setLoginPassword("");
@@ -1424,11 +2031,52 @@ export default function App() {
     }
   };
 
-  const pageTitle = activeMenu;
-  const pageSubtitle =
-    activeMenu === "Dashboard"
-      ? "Overview users, roles, plans, subscriptions, and activity."
-      : "Manage users, roles, plans, subscriptions, features, and limits.";
+  const resolveDeletionRequest = async (requestId, status, adminNote) => {
+    setSaving(true);
+    setDeletionError("");
+    try {
+      if (DELETION_PREVIEW_MODE) {
+        setDeletionRequests((current) =>
+          current.map((request) =>
+            request.id === requestId
+              ? { ...request, status, adminNote: adminNote.trim() || null }
+              : request,
+          ),
+        );
+        setSelectedDeletionRequest(null);
+        showToast("Mode preview: status permintaan berhasil diperbarui.");
+        return;
+      }
+      await apiRequest(`/api/admin/account-deletion-requests/${requestId}/status`, {
+        ...auth,
+        method: "PATCH",
+        body: { status, adminNote: adminNote.trim() || null },
+      });
+      setSelectedDeletionRequest(null);
+      await loadDeletionRequests();
+      const messages = {
+        rejected: "Permintaan penghapusan berhasil ditolak.",
+        processing: "Proses penghapusan akun berhasil dimulai.",
+        completed: "Permintaan penghapusan ditandai selesai.",
+      };
+      showToast(messages[status] || "Status permintaan berhasil diperbarui.");
+    } catch (err) {
+      setDeletionError(err.message);
+      showToast(err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pageTitle =
+    activeMenu === "Permintaan Hapus"
+      ? "Penghapusan Akun"
+      : activeMenu;
+  const pageSubtitle = {
+    Dashboard: "Overview users, roles, plans, subscriptions, and activity.",
+    "Permintaan Hapus":
+      "Kelola permintaan penghapusan akun secara aman dan terdokumentasi.",
+  }[activeMenu] || "Manage users, roles, plans, subscriptions, features, and limits.";
 
   if (!token) {
     return (
@@ -1454,6 +2102,7 @@ export default function App() {
 
       <main className="min-h-screen md:ml-64">
         <div className="mx-auto max-w-[1600px] p-5 md:p-8">
+          <MobileMenu activeMenu={activeMenu} setActiveMenu={setActiveMenu} />
           <header className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
               <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
@@ -1464,18 +2113,34 @@ export default function App() {
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() =>
-                  loadData({ successMessage: "Data dashboard berhasil diperbarui." })
+                onClick={() => {
+                  if (activeMenu === "Permintaan Hapus") {
+                    void loadDeletionRequests({
+                      successMessage: "Data permintaan berhasil diperbarui.",
+                    });
+                    return;
+                  }
+                  void loadData({
+                    successMessage: "Data dashboard berhasil diperbarui.",
+                  });
+                }}
+                disabled={
+                  activeMenu === "Permintaan Hapus" ? deletionLoading : loading
                 }
-                disabled={loading}
                 className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-60"
               >
-                {loading ? "Refreshing..." : "Refresh"}
+                {activeMenu === "Permintaan Hapus"
+                  ? deletionLoading
+                    ? "Memperbarui..."
+                    : "Perbarui"
+                  : loading
+                    ? "Refreshing..."
+                    : "Refresh"}
               </button>
             </div>
           </header>
 
-          {error ? (
+          {error && activeMenu !== "Permintaan Hapus" ? (
             <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
               {error}
             </div>
@@ -1500,6 +2165,23 @@ export default function App() {
               setPage={setPage}
               onOpenUser={openUser}
               loading={loading}
+            />
+          ) : null}
+
+          {activeMenu === "Permintaan Hapus" ? (
+            <DeletionRequestsView
+              requests={deletionRequests}
+              summary={deletionSummary}
+              filters={deletionFilters}
+              setFilters={setDeletionFilters}
+              loading={deletionLoading}
+              error={deletionError}
+              onSelect={setSelectedDeletionRequest}
+              onRefresh={() =>
+                loadDeletionRequests({
+                  successMessage: "Data permintaan berhasil diperbarui.",
+                })
+              }
             />
           ) : null}
 
@@ -1545,6 +2227,16 @@ export default function App() {
           plan={editingPlan}
           onClose={() => setEditingPlan(null)}
           onSave={savePlan}
+          saving={saving}
+        />
+      ) : null}
+
+
+      {selectedDeletionRequest ? (
+        <DeletionRequestModal
+          request={selectedDeletionRequest}
+          onClose={() => setSelectedDeletionRequest(null)}
+          onResolve={resolveDeletionRequest}
           saving={saving}
         />
       ) : null}
